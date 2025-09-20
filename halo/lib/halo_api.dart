@@ -1,162 +1,140 @@
+// lib/halo_api.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart'; // Import for kDebugMode
+import 'package:flutter/foundation.dart';
 
-// Your backend's host URL.
 const String _kBaseUrl = 'http://127.0.0.1:8000';
 
 class HaloApi {
-  // Helper method for API calls
   static Future<dynamic> _post(String path, Map<String, dynamic> data) async {
     final uri = Uri.parse('$_kBaseUrl$path');
     try {
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      );
+      final response = await http.post(uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(data));
       if (kDebugMode) {
-        print('POST $path response: ${response.statusCode}');
-        print('Body: ${response.body}');
+        print('POST $path -> ${response.statusCode}');
+        print(response.body);
       }
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('API error: ${response.statusCode} - ${response.body}');
-      }
+      return jsonDecode(response.body);
     } catch (e) {
-      if (kDebugMode) {
-        print('API POST error on $path: $e');
-      }
+      if (kDebugMode) print('POST error $path: $e');
       rethrow;
     }
   }
 
-  // Helper method for GET requests
   static Future<dynamic> _get(String path) async {
     final uri = Uri.parse('$_kBaseUrl$path');
     try {
       final response = await http.get(uri);
       if (kDebugMode) {
-        print('GET $path response: ${response.statusCode}');
-        print('Body: ${response.body}');
+        print('GET $path -> ${response.statusCode}');
+        print(response.body);
       }
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception('API error: ${response.statusCode} - ${response.body}');
-      }
+      return jsonDecode(response.body);
     } catch (e) {
-      if (kDebugMode) {
-        print('API GET error on $path: $e');
-      }
+      if (kDebugMode) print('GET error $path: $e');
       rethrow;
     }
   }
 
-  // --- NEW: Child Registration ---
-  static Future<void> registerChild({
-    required String uid,
-    required String name,
-    required String parentUid,
-    String? dob,
-    String? address,
-    String? bloodGroup,
-    List<String>? parentContacts,
-  }) async {
-    await _post('/child/register', {
-      'uid': uid,
-      'name': name,
-      'parent_uid': parentUid,
-      'dob': dob,
-      'address': address,
-      'blood_group': bloodGroup,
-      'parent_contacts': parentContacts ?? [],
-    });
+  // Parent
+  static Future<String?> parentLogin(String username, String password) async {
+    final res = await _post('/parent/login', {'username': username, 'password': password});
+    return res['ok'] == true ? res['parent_uid'] as String? : null;
   }
 
-  // --- NEW: SOS Alert ---
-  static Future<void> sendSos({
-    required String childId,
-    double? lat,
-    double? lng,
-  }) async {
-    await _post('/child/sos', {'uid': childId, 'lat': lat, 'lng': lng});
+  static Future<List<dynamic>> getChildren(String parentUid) async {
+    final res = await _get('/parent/children/$parentUid');
+    return (res['children'] as List<dynamic>?) ?? [];
   }
 
-  // --- NEW: Report Text ---
-  static Future<void> reportText(String text, {required String childId}) async {
-    await _post('/child/report_text', {'child_uid': childId, 'text_content': text});
-  }
-
-  // --- App Usage ---
-  static Future<dynamic> getAppUsageSummary(String childUid) async {
-    return await _get('/child/usage_summary/$childUid');
-  }
-
-  // --- Journal ---
-  static Future<void> saveJournal({
-    required String childUid,
-    required List<String> good,
-    required List<String> bad,
-  }) async {
-    await _post('/child/journal', {
-      'uid': childUid,
-      'good': good,
-      'bad': bad,
-    });
-  }
-
-  // --- NEW: Get Child Journals (for Parent) ---
-  static Future<List<dynamic>> getChildJournals(String parentUid) async {
-    final response = await _get('/parent/journals/$parentUid');
-    return response['journals'];
-  }
-
-  // --- Reminder ---
-  static Future<void> setReminder({
-    required String childUid,
-    required String type,
-    required int intervalMinutes,
-  }) async {
-    await _post('/child/reminder', {
-      'uid': childUid,
-      'type': type,
-      'interval_minutes': intervalMinutes,
-    });
-  }
-
-  // --- Flashcards ---
-  static Future<List<dynamic>> getFlashcards() async {
-    final response = await _get('/child/flashcards');
-    return response['cards'];
-  }
-
-  // --- Location ---
-  static Future<void> updateLocation({
-    required String childUid,
-    required double lat,
-    required double lng,
-  }) async {
-    await _post('/child/location', {
-      'uid': childUid,
-      'lat': lat,
-      'lng': lng,
-    });
-  }
-
-  static Future<dynamic> getChildLocation(String childUid) async {
-    final response = await _get('/parent/find_child/$childUid');
-    return response['location'];
-  }
-
-  // --- Alerts ---
   static Future<List<dynamic>> getAlerts(String parentUid) async {
-    final response = await _get('/parent/alerts/$parentUid');
-    return response['alerts'];
+    final res = await _get('/parent/alerts/$parentUid');
+    return (res['alerts'] as List<dynamic>?) ?? [];
   }
 
-  static Future<void> markAlertRead(String alertId) async {
-    await _post('/parent/alert/$alertId', {'acknowledged': true});
+  static Future<List<dynamic>> getAlertTrends(String parentUid) async {
+    final res = await _get('/parent/alerts/trends/$parentUid');
+    return (res['trends'] as List<dynamic>?) ?? [];
+  }
+
+  static Future<List<dynamic>> getChildJournals(String parentUid) async {
+    final res = await _get('/parent/journals/$parentUid');
+    return (res['journals'] as List<dynamic>?) ?? [];
+  }
+
+  static Future<Map<String, dynamic>> getJournalStats(String parentUid) async {
+    final res = await _get('/parent/journal_stats/$parentUid');
+    return {'good': res['good'] ?? 0, 'bad': res['bad'] ?? 0};
+  }
+
+  static Future<List<dynamic>> getParentMessages(String parentUid) async {
+    final res = await _get('/parent/messages/$parentUid');
+    return (res['messages'] as List<dynamic>?) ?? [];
+  }
+
+  static Future<void> acknowledgeAlert(String alertId, {bool acknowledged = true, String? feedback}) async {
+    await _post('/parent/alert/$alertId', {'acknowledged': acknowledged, 'feedback': feedback});
+  }
+
+  // Child
+  static Future<String?> childLogin(String uid) async {
+    final res = await _post('/child/login', {'uid': uid});
+    return res['ok'] == true ? res['child_uid'] as String? : null;
+  }
+
+  static Future<bool> checkChildExists(String uid) async {
+    final res = await _get('/child/exists/$uid');
+    return res['exists'] == true;
+  }
+
+  static Future<void> registerChild({required String uid, required String name, required String parentUid}) async {
+    await _post('/child/register', {'uid': uid, 'name': name, 'parent_uid': parentUid});
+  }
+
+  static Future<void> saveJournal({required String childUid, required List<String> good, required List<String> bad}) async {
+    await _post('/child/journal', {'uid': childUid, 'good': good, 'bad': bad});
+  }
+
+  static Future<List<dynamic>> getReminders(String childUid) async {
+    final res = await _get('/child/reminders/$childUid');
+    return (res['reminders'] as List<dynamic>?) ?? [];
+  }
+
+  static Future<Map<String, dynamic>> getUsageSummary(String childUid) async {
+    final res = await _get('/child/usage_summary/$childUid');
+    return {
+      'ok': res['ok'] ?? false,
+      'total_seconds': res['total_seconds'] ?? 0,
+      'unlock_count': res['unlock_count'] ?? 0,
+      'summary': (res['summary'] as List<dynamic>?) ?? []
+    };
+  }
+
+  static Future<List<dynamic>> getFlashcards() async {
+    final res = await _get('/child/flashcards');
+    return (res['cards'] as List<dynamic>?) ?? [];
+  }
+
+  static Future<List<dynamic>> getChildMessages(String childUid) async {
+    final res = await _get('/child/messages/$childUid');
+    return (res['messages'] as List<dynamic>?) ?? [];
+  }
+
+  static Future<void> sendMessage({required String sender, required String recipient, required String text}) async {
+    await _post('/message/send', {'sender': sender, 'recipient': recipient, 'text': text});
+  }
+
+  static Future<void> sendSos({required String childId}) async {
+    await _post('/child/sos', {'uid': childId});
+  }
+
+  static Future<void> reportText({required String childUid, required String text}) async {
+    await _post('/child/report_text', {'child_uid': childUid, 'text_content': text});
+  }
+
+  static Future<void> setReminder({required String childUid, required String type, int? intervalMinutes}) async {
+    await _post('/child/reminder', {'uid': childUid, 'type': type, 'interval_minutes': intervalMinutes});
   }
 }
